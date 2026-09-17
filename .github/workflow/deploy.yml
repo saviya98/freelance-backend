@@ -1,0 +1,38 @@
+name: Deploy Backend
+ 
+on:
+  push:
+    branches:
+      - main
+ 
+concurrency:
+  group: deploy-backend-main
+  cancel-in-progress: true
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Deploy Backend to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+        run: |
+          set -e
+ 
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$EC2_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
+ 
+          ssh -i ~/.ssh/deploy_key -p "$EC2_PORT" "$EC2_USER@$EC2_HOST" << 'EOF'
+            set -e
+            cd /home/ubuntu/freelance-backend
+            git pull origin main
+            npm ci
+            pm2 restart backend || pm2 start src/server.js --name backned
+            pm2 save
+          EOF
